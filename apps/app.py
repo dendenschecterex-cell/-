@@ -7,67 +7,58 @@ import re
 # ページ設定
 st.set_page_config(page_title="合同会社霞海喜実績管理", layout="wide")
 
-# カラー設定（本所＝青、葛西＝オレンジ）
-COLOR_MAP = {
-    "かすみ介護相談室": "#1f77b4",      # ビジネス・ブルー
-    "かすみ介護相談室葛西": "#ff7f0e"  # エネルギッシュ・オレンジ
-}
-
-# デザインとフォントの徹底調整
+# CSS（謎の文字が出ないように修正済）
 st.markdown("""
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-    * { font-family: 'Noto Sans JP', sans-serif; }
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@900&display=swap');
     
-    /* 全体の背景 */
-    .stApp { background-color: #f4f7f9; }
+    .stApp { background-color: #f8f9fa; }
     
-    /* ヘッダーデザイン */
-    .header-box {
-        background: linear-gradient(135deg, #1e3d59 0%, #2d547a 100%);
-        padding: 30px;
-        border-radius: 15px;
-        color: white;
-        margin-bottom: 30px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    /* 巨大なメトリクスカード */
+    .metric-container {
+        display: flex;
+        justify-content: space-around;
+        gap: 20px;
+        margin-bottom: 40px;
     }
-    
-    /* 指標カードのデザイン */
-    .metric-card {
+    .m-card {
         background: white;
-        padding: 25px;
-        border-radius: 15px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        border-top: 5px solid #1f77b4;
+        padding: 40px;
+        border-radius: 20px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        width: 100%;
         text-align: center;
+        border-bottom: 10px solid #1f77b4;
     }
-    .metric-label { font-size: 20px; color: #666; font-weight: 700; }
-    .metric-value { font-size: 55px; color: #1e3d59; font-weight: 900; margin: 10px 0; }
-    
+    .m-label { font-size: 30px; font-weight: bold; color: #555; margin-bottom: 10px; }
+    .m-value { font-size: 100px; font-weight: 900; color: #1e3d59; line-height: 1; }
+    .m-unit { font-size: 40px; font-weight: bold; color: #1e3d59; }
+
     /* セクション見出し */
-    .section-title {
-        font-size: 28px;
+    .section-header {
+        font-size: 40px;
         font-weight: 900;
         color: #1e3d59;
-        margin-top: 40px;
-        margin-bottom: 20px;
-        border-left: 8px solid #ff7f0e;
-        padding-left: 15px;
+        margin: 50px 0 20px 0;
+        padding: 10px 20px;
+        border-left: 15px solid #ff7f0e;
+        background: #fff;
+        border-radius: 5px;
     }
 
-    /* アップローダーを隠す */
+    /* アップローダー関連を隠す */
     [data-testid="stFileUploaderFileName"], [data-testid="stFileUploaderFileData"] { display: none; }
     </style>
     """, unsafe_allow_html=True)
 
-# ヘッダー表示
-st.markdown('<div class="header-box"><h1 style="margin:0; font-size:40px;">🏢 合同会社霞海喜 経営管理システム</h1><p style="margin:5px 0 0 0; opacity:0.8;">Executive Management Dashboard</p></div>', unsafe_allow_html=True)
+# ヘッダー
+st.markdown('<div style="background:#1e3d59; padding:40px; border-radius:20px; color:white; text-align:center; margin-bottom:40px;"><h1 style="font-size:60px; margin:0;">🏢 合同会社霞海喜 経営管理システム</h1></div>', unsafe_allow_html=True)
 
-# --- ファイルアップロード（開閉式） ---
-with st.expander("📥 CSVデータ取込（ファイルをドロップ後、閉じてください）"):
+# --- ファイルアップロード ---
+with st.expander("📥 データを更新する（ここをクリックしてファイルをドロップ）"):
     uploaded_files = st.file_uploader("", type="csv", accept_multiple_files=True, label_visibility="collapsed")
 
-# 報酬計算ロジック
+# 報酬計算
 def estimate_revenue(kaigodo):
     k = str(kaigodo)
     u_price = 10.9
@@ -104,61 +95,70 @@ if uploaded_files:
 if all_data_list:
     df_all = pd.concat(all_data_list).drop_duplicates(subset=['利用者名', '年月'])
     months = sorted(df_all['年月'].unique(), reverse=True)
-    
-    # 月選択
     selected_month = st.selectbox("📅 表示月を選択", months)
     df_latest = df_all[df_all['年月'] == selected_month]
 
-    # --- 1. 最重要指標 (KPI) ---
-    st.markdown('<p class="section-title">📊 全体コンディション</p>', unsafe_allow_html=True)
-    kpi1, kpi2 = st.columns(2)
-    with kpi1:
-        st.markdown(f'<div class="metric-card"><div class="metric-label">総利用者数</div><div class="metric-value">{len(df_latest)} <span style="font-size:25px;">件</span></div></div>', unsafe_allow_html=True)
-    with kpi2:
-        st.markdown(f'<div class="metric-card"><div class="metric-label">総見込報酬</div><div class="metric-value">¥ {df_latest["概算報酬"].sum():,} <span style="font-size:25px;">円</span></div></div>', unsafe_allow_html=True)
+    # --- 1. 最重要指標 (巨大化) ---
+    st.markdown('<p class="section-header">💰 全体コンディション</p>', unsafe_allow_html=True)
+    rev_total = df_latest['概算報酬'].sum()
+    cnt_total = len(df_latest)
+    
+    st.markdown(f"""
+    <div class="metric-container">
+        <div class="m-card"><div class="m-label">総利用者数</div><div class="m-value">{cnt_total}<span class="m-unit"> 件</span></div></div>
+        <div class="m-card"><div class="m-label">総見込報酬</div><div class="m-value">¥ {rev_total:,}<span class="m-unit"> 円</span></div></div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # --- 2. ケアマネ別売上ランキング (経営者が次に気にするもの) ---
-    st.markdown('<p class="section-title">🏆 ケアマネジャー別 売上実績</p>', unsafe_allow_html=True)
+    # --- 2. ケアマネ別売上ランキング ---
+    st.markdown('<p class="section-header">🏆 ケアマネ別 売上ランキング</p>', unsafe_allow_html=True)
     cm_summary = df_latest.groupby(['ケアマネ', '拠点']).agg({'概算報酬':'sum'}).reset_index().sort_values('概算報酬', ascending=False)
-    fig_rank = px.bar(cm_summary, x='ケアマネ', y='概算報酬', text='概算報酬', color='拠点', color_discrete_map=COLOR_MAP)
-    fig_rank.update_traces(texttemplate='¥%{text:,.0f}', textposition='outside', textfont=dict(size=16, color="black", family="Noto Sans JP"))
-    fig_rank.update_layout(xaxis_tickfont_size=18, plot_bgcolor="rgba(0,0,0,0)", yaxis_visible=False)
+    fig_rank = px.bar(cm_summary, x='ケアマネ', y='概算報酬', text='概算報酬', color='拠点', 
+                        color_discrete_map={"かすみ介護相談室": "#1f77b4", "かすみ介護相談室葛西": "#ff7f0e"})
+    fig_rank.update_traces(texttemplate='¥%{text:,.0f}', textposition='outside', textfont_size=20)
+    fig_rank.update_layout(xaxis_tickfont_size=22, height=600, yaxis_visible=False, plot_bgcolor="rgba(0,0,0,0)")
     st.plotly_chart(fig_rank, use_container_width=True)
 
-    # --- 3. 拠点別詳細・介護度内訳 ---
-    st.markdown('<p class="section-title">📍 拠点別 詳細分析</p>', unsafe_allow_html=True)
+    # --- 3. 拠点別・介護度内訳 (円グラフ見切れ対策) ---
+    st.markdown('<p class="section-header">📍 拠点別 詳細分析</p>', unsafe_allow_html=True)
     col_b1, col_b2 = st.columns(2)
-    branches = ["かすみ介護相談室", "かすみ介護相談室葛西"]
+    branches = [("かすみ介護相談室", col_b1, "#1f77b4"), ("かすみ介護相談室葛西", col_b2, "#ff7f0e")]
     
-    for branch, col in zip(branches, [col_b1, col_b2]):
+    for branch, col, color in branches:
         with col:
             df_b = df_latest[df_latest['拠点'] == branch]
             rev_b = df_b['概算報酬'].sum()
-            st.markdown(f'<div style="background:{COLOR_MAP[branch]}; color:white; padding:15px; border-radius:10px; font-weight:900; font-size:22px; text-align:center;">{branch}<br><span style="font-size:28px;">¥ {rev_b:,} 円 ({len(df_b)}件)</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="background:{color}; color:white; padding:20px; border-radius:15px; font-weight:900; font-size:30px; text-align:center; margin-bottom:20px;">{branch}<br>¥ {rev_b:,} 円 ({len(df_b)}件)</div>', unsafe_allow_html=True)
             care_data = df_b['要介護度'].value_counts().reset_index()
-            fig_pie = px.pie(care_data, values='count', names='要介護度', hole=0.5, color_discrete_sequence=px.colors.qualitative.Prism)
-            fig_pie.update_traces(textinfo='percent+label', textfont_size=16)
-            fig_pie.update_layout(margin=dict(t=30, b=0, l=0, r=0), height=350)
+            fig_pie = px.pie(care_data, values='count', names='要介護度', hole=0.5, 
+                             color_discrete_sequence=px.colors.qualitative.Pastel)
+            # 文字切れ対策
+            fig_pie.update_traces(textinfo='percent+label', textfont_size=20, textposition='outside')
+            fig_pie.update_layout(margin=dict(t=50, b=50, l=50, r=50), height=500, showlegend=True, legend=dict(font=dict(size=18)))
             st.plotly_chart(fig_pie, use_container_width=True)
 
-    # --- 4. 月次推移 (縦棒グラフ) ---
-    st.markdown('<p class="section-title">📈 12ヶ月推移分析（縦棒グラフ）</p>', unsafe_allow_html=True)
+    # --- 4. 12ヶ月推移 (横幅フル活用 + データラベル追加) ---
+    st.markdown('<p class="section-header">📈 月次推移分析（縦棒フルサイズ）</p>', unsafe_allow_html=True)
     trend_df = df_all.groupby(['年月', '拠点']).agg({'利用者名':'count', '概算報酬':'sum'}).reset_index()
     trend_df['月'] = trend_df['年月'].apply(lambda x: f"{int(x.split('-')[1])}月")
 
-    t_col1, t_col2 = st.columns(2)
-    with t_col1:
-        fig_t_rev = px.bar(trend_df, x='月', y='概算報酬', color='拠点', barmode='group', title="売上の推移 (円)", color_discrete_map=COLOR_MAP)
-        fig_t_rev.update_layout(font_size=14, xaxis_title="", yaxis_title="報酬額")
-        st.plotly_chart(fig_t_rev, use_container_width=True)
-    with t_col2:
-        fig_t_cnt = px.bar(trend_df, x='月', y='利用者名', color='拠点', barmode='group', title="件数の推移 (件)", color_discrete_map=COLOR_MAP)
-        fig_t_cnt.update_layout(font_size=14, xaxis_title="", yaxis_title="利用者数")
-        st.plotly_chart(fig_t_cnt, use_container_width=True)
+    # 売上推移
+    fig_t_rev = px.bar(trend_df, x='月', y='概算報酬', color='拠点', barmode='group', text='概算報酬',
+                       title="【売上の推移】 (円)", color_discrete_map={"かすみ介護相談室": "#1f77b4", "かすみ介護相談室葛西": "#ff7f0e"})
+    fig_t_rev.update_traces(texttemplate='¥%{text:,.0f}', textposition='outside', textfont_size=16)
+    fig_t_rev.update_layout(height=600, xaxis_tickfont_size=20, yaxis_title="報酬額", font=dict(size=18))
+    st.plotly_chart(fig_t_rev, use_container_width=True)
 
-    # --- 5. 担当者ドリルダウン ---
-    st.markdown('<p class="section-title">🔍 担当者別 詳細カルテ</p>', unsafe_allow_html=True)
-    selected_cm = st.selectbox("確認したい担当者を選択", ["-- 選択してください --"] + list(cm_summary['ケアマネ'].unique()))
+    # 件数推移
+    fig_t_cnt = px.bar(trend_df, x='月', y='利用者名', color='拠点', barmode='group', text='利用者名',
+                       title="【件数の推移】 (件)", color_discrete_map={"かすみ介護相談室": "#1f77b4", "かすみ介護相談室葛西": "#ff7f0e"})
+    fig_t_cnt.update_traces(texttemplate='%{text}件', textposition='outside', textfont_size=18)
+    fig_t_cnt.update_layout(height=600, xaxis_tickfont_size=20, yaxis_title="利用者数", font=dict(size=18))
+    st.plotly_chart(fig_t_cnt, use_container_width=True)
+
+    # --- 5. 担当者別ドリルダウン ---
+    st.markdown('<p class="section-header">🔍 担当者別 詳細カルテ</p>', unsafe_allow_html=True)
+    selected_cm = st.selectbox("担当者名を選択してください", ["-- 選択してください --"] + list(cm_summary['ケアマネ'].unique()))
     
     if selected_cm != "-- 選択してください --":
         cm_data = df_latest[df_latest['ケアマネ'] == selected_cm]
@@ -166,8 +166,8 @@ if all_data_list:
         
         c_m1, c_m2, c_m3 = st.columns(3)
         c_m1.metric("当月件数", f"{len(cm_data)} 件")
-        c_m2.metric("当月売上", f"¥ {cm_data['概算報酬'].sum():,} 円")
-        c_m3.metric("累計売上額 (全期間)", f"¥ {cm_all_time_rev:,} 円")
+        c_m2.metric("当月売上額", f"¥ {cm_data['概算報酬'].sum():,} 円")
+        c_m3.metric("全期間累計売上", f"¥ {cm_all_time_rev:,} 円")
         
         st.dataframe(cm_data[['利用者名', '要介護度', 'メモ', '概算報酬']].style.format({"概算報酬": "¥{:,.0f}"}), use_container_width=True)
 
