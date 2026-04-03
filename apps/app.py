@@ -7,10 +7,10 @@ import re
 # ページ設定
 st.set_page_config(page_title="合同会社霞海喜実績管理", layout="wide")
 
-# CSS（デザイン調整）
+# CSS（デザイン調整・フォント強化）
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@700;900&display=swap');
     .stApp { background-color: #f8f9fa; }
     
     /* 巨大なメトリクス */
@@ -40,18 +40,27 @@ st.markdown('<div style="background:#1e3d59; padding:30px; border-radius:15px; c
 with st.expander("📥 データを取込・更新（終わったら閉じてください）"):
     uploaded_files = st.file_uploader("", type="csv", accept_multiple_files=True, label_visibility="collapsed")
 
-# 報酬計算（江戸川区：1級地 10.9円）
+# 報酬計算（江戸川区：1級地 10.9円 ＋ 特定事業所加算II 407単位対応）
 def estimate_revenue(kaigodo):
     k = str(kaigodo)
     u_price = 10.9
-    if '介１' in k or '介２' in k: units = 1086
-    elif '介３' in k or '介４' in k or '介５' in k: units = 1398
-    elif '支' in k: units = 442
-    else: units = 0
+    add_ii = 407 # 特定事業所加算II
+    
+    if '介１' in k or '介２' in k:
+        units = 1086 + add_ii
+    elif '介３' in k or '介４' in k or '介５' in k:
+        units = 1398 + add_ii
+    elif '支' in k:
+        units = 442 # 要支援は加算対象外(委託)
+    else:
+        units = 0
     return int(units * u_price)
 
+# 伊藤さんを本所に修正
 def get_branch(cm_name):
-    if any(kw in str(cm_name) for kw in ["中村", "鈴木", "西野"]): return "かすみ介護相談室"
+    name = str(cm_name)
+    if any(kw in name for kw in ["中村", "鈴木", "西野", "伊藤"]):
+        return "かすみ介護相談室"
     return "かすみ介護相談室葛西"
 
 def get_month_from_filename(filename):
@@ -86,8 +95,8 @@ if all_data_list:
     selected_month = st.selectbox("📅 表示する月を選択してください", months_desc)
     df_latest = df_all[df_all['年月'] == selected_month]
 
-    # --- 1. メイン指標（選択月と累計） ---
-    st.markdown(f'<p class="section-header">💰 {to_jp_month(selected_month)} 実績状況</p>', unsafe_allow_html=True)
+    # --- 1. メインコンディション ---
+    st.markdown(f'<p class="section-header">💰 {to_jp_month(selected_month)} 実績概況（特定事業所加算II込）</p>', unsafe_allow_html=True)
     rev_monthly = df_latest['概算報酬'].sum()
     cnt_monthly = len(df_latest)
     rev_total_all = df_all['概算報酬'].sum()
@@ -100,37 +109,31 @@ if all_data_list:
     </div>
     """, unsafe_allow_html=True)
 
-    # --- 2. ケアマネ別ランキング（当月実績メイン＋累計併記） ---
-    st.markdown(f'<p class="section-header">🏆 ケアマネ別：{to_jp_month(selected_month)}実績（累計売上も表示）</p>', unsafe_allow_html=True)
-    
-    # 当月集計
+    # --- 2. ケアマネ別ランキング（当月売上順にソート） ---
+    st.markdown(f'<p class="section-header">🏆 ケアマネ別：{to_jp_month(selected_month)} 実績ランキング</p>', unsafe_allow_html=True)
     monthly_cm = df_latest.groupby(['ケアマネ', '拠点']).agg({'概算報酬':'sum'}).reset_index()
-    # 累計集計
     total_cm = df_all.groupby('ケアマネ').agg({'概算報酬':'sum'}).reset_index()
     total_cm.columns = ['ケアマネ', '累計報酬']
-    # 合体
-    rank_df = pd.merge(monthly_cm, total_cm, on='ケアマネ').sort_values('概算報酬', ascending=False)
+    rank_df = pd.merge(monthly_cm, total_cm, on='ケアマネ').sort_values('概算報酬', ascending=False) # 当月売上順
 
     fig_rank = go.Figure()
-    # 拠点で色分けするためにループ
     for branch, color in [("かすみ介護相談室", "#1f77b4"), ("かすみ介護相談室葛西", "#ff7f0e")]:
         b_df = rank_df[rank_df['拠点'] == branch]
         fig_rank.add_trace(go.Bar(
             x=b_df['ケアマネ'], y=b_df['概算報酬'], name=branch, marker_color=color,
-            customdata=b_df['累計報酬'],
-            text=b_df.apply(lambda r: f"当月 ¥{r['概算報酬']:,}<br><span style='font-size:12px;'>累計 ¥{r['累計報酬']:,}</span>", axis=1),
+            text=b_df.apply(lambda r: f"<b>当月 ¥{r['概算報酬']:,}</b><br>累計 ¥{r['累計報酬']:,}", axis=1),
             textposition='outside',
             textfont=dict(size=14, color="black")
         ))
     
     fig_rank.update_layout(
-        xaxis_tickfont_size=18, height=600, margin=dict(t=80),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        xaxis_tickfont_size=18, height=600, margin=dict(t=100),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=16)),
         plot_bgcolor="rgba(0,0,0,0)", yaxis_visible=False
     )
     st.plotly_chart(fig_rank, use_container_width=True)
 
-    # --- 3. 拠点別 詳細分析 ---
+    # --- 3. 拠点別 詳細分析（件数表示を削除） ---
     st.markdown('<p class="section-header">📍 拠点別 詳細内訳</p>', unsafe_allow_html=True)
     col_b1, col_b2 = st.columns(2)
     branches = [("かすみ介護相談室", col_b1, "#1f77b4"), ("かすみ介護相談室葛西", col_b2, "#ff7f0e")]
@@ -138,29 +141,28 @@ if all_data_list:
         with col:
             df_b = df_latest[df_latest['拠点'] == branch]
             rev_b = df_b['概算報酬'].sum()
-            st.markdown(f'<div style="background:{color}; color:white; padding:15px; border-radius:15px; font-weight:900; font-size:25px; text-align:center; margin-bottom:10px;">{branch}<br>¥ {rev_b:,} 円 ({len(df_b)}件)</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="background:{color}; color:white; padding:15px; border-radius:15px; font-weight:900; font-size:25px; text-align:center; margin-bottom:10px;">{branch}<br>¥ {rev_b:,} 円</div>', unsafe_allow_html=True)
             care_data = df_b['要介護度'].value_counts().reset_index()
-            fig_pie = px.pie(care_data, values='count', names='要介護度', hole=0.4, 
-                             color_discrete_sequence=px.colors.qualitative.Pastel)
+            fig_pie = px.pie(care_data, values='count', names='要介護度', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
             fig_pie.update_traces(textinfo='label+percent', textposition='inside', insidetextfont=dict(size=18, color="black"))
             fig_pie.update_layout(margin=dict(t=20, b=20, l=20, r=20), height=500, showlegend=True, 
                                   legend=dict(orientation="h", yanchor="bottom", y=-0.1, xanchor="center", x=0.5, font=dict(size=14)))
             st.plotly_chart(fig_pie, use_container_width=True)
 
     # --- 4. 月次推移分析 ---
-    st.markdown('<p class="section-header">📈 月次推移分析（時系列順）</p>', unsafe_allow_html=True)
+    st.markdown('<p class="section-header">📈 月次推移分析</p>', unsafe_allow_html=True)
     trend_df = df_all.groupby(['年月', '拠点']).agg({'利用者名':'count', '概算報酬':'sum'}).reset_index().sort_values('年月')
     trend_df['表示年月'] = trend_df['年月'].apply(to_jp_month)
 
     fig_t_rev = px.bar(trend_df, x='表示年月', y='概算報酬', color='拠点', barmode='group', text='概算報酬',
                        color_discrete_map={"かすみ介護相談室": "#1f77b4", "かすみ介護相談室葛西": "#ff7f0e"})
-    fig_t_rev.update_traces(texttemplate='¥%{text:,.0f}', textposition='outside', textfont_size=16)
+    fig_t_rev.update_traces(texttemplate='¥%{text:,.0f}', textposition='outside', textfont=dict(size=14, color="black", family="Noto Sans JP"))
     fig_t_rev.update_layout(title="【報酬の推移】", height=500, xaxis_tickfont_size=18, xaxis_title="", font=dict(size=16))
     st.plotly_chart(fig_t_rev, use_container_width=True)
 
     fig_t_cnt = px.bar(trend_df, x='表示年月', y='利用者名', color='拠点', barmode='group', text='利用者名',
                        color_discrete_map={"かすみ介護相談室": "#1f77b4", "かすみ介護相談室葛西": "#ff7f0e"})
-    fig_t_cnt.update_traces(texttemplate='%{text}件', textposition='outside', textfont_size=16)
+    fig_t_cnt.update_traces(texttemplate='%{text}件', textposition='outside', textfont=dict(size=14, color="black", family="Noto Sans JP"))
     fig_t_cnt.update_layout(title="【件数の推移】", height=500, xaxis_tickfont_size=18, xaxis_title="", font=dict(size=16))
     st.plotly_chart(fig_t_cnt, use_container_width=True)
 
@@ -179,4 +181,4 @@ if all_data_list:
         st.dataframe(cm_data[['利用者名', '要介護度', 'メモ', '概算報酬']].style.format({"概算報酬": "¥{:,.0f}"}), use_container_width=True)
 
 else:
-    st.info("CSVファイルをアップロードしてください。ファイル名は『2026.04_xxx.csv』のように始めてください。")
+    st.info("CSVファイルをアップロードしてください（例：2026.04_実績.csv）")
