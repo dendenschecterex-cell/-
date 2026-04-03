@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import re
 
@@ -21,7 +22,7 @@ st.markdown('<p class="main-title">🏢 合同会社霞海喜 実績管理シス
 
 # --- 1. ファイルアップローダー ---
 st.subheader("📁 CSVファイルをまとめてアップロード")
-st.caption("※ファイル名の先頭を『2026.03_xxx.csv』のようにしてアップしてください")
+st.caption("※ファイル名の先頭を『2026.04_xxx.csv』のようにしてアップしてください")
 uploaded_files = st.file_uploader("CSVファイルを選択してください（複数可）", type="csv", accept_multiple_files=True)
 
 # 報酬計算（江戸川区: 1級地 10.9円）
@@ -40,7 +41,7 @@ def get_branch(cm_name):
     if any(kw in cm_name for kw in ["中村", "鈴木", "西野"]): return "かすみ介護相談室"
     else: return "かすみ介護相談室葛西"
 
-# ファイル名から年月を抜く関数
+# ファイル名から年月を抜く関数（エラーに強い形式）
 def get_month_from_filename(filename):
     match = re.search(r'(\d{4})[.-](\d{1,2})', filename)
     if match:
@@ -71,7 +72,7 @@ if all_data_list:
     latest_month = months[-1]
     df_latest = df_all[df_all['年月'] == latest_month]
 
-    # --- 【最上段】巨大な数字 ---
+    # --- 【最上段】メイン指標 ---
     st.divider()
     st.subheader(f"📊 {latest_month} 最新の全体実績")
     t1, t2 = st.columns(2)
@@ -87,18 +88,24 @@ if all_data_list:
     col1, col2 = st.columns(2)
     with col1:
         st.markdown('<p class="branch-label">拠点別：件数と報酬の比較</p>', unsafe_allow_html=True)
-        fig = go.Figure()
-        fig.add_trace(go.Bar(x=b_summary['拠点'], y=b_summary['利用者名'], name='件数', text=b_summary['利用者名'],
-                             marker_color='#1f77b4', texttemplate='%{text}件', textfont=dict(size=25)))
-        fig.add_trace(go.Bar(x=b_summary['拠点'], y=b_summary['概算報酬'], name='報酬', text=b_summary['概算報酬'],
-                             marker_color='#ff7f0e', yaxis='y2', texttemplate='¥%{text:,.0f}円', textfont=dict(size=25)))
+        # エラーに強い2軸グラフの作成
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        
+        fig.add_trace(go.Bar(x=b_summary['拠点'], y=b_summary['利用者名'], name='件数', 
+                             marker_color='#1f77b4', text=b_summary['利用者名'], textposition='auto',
+                             textfont=dict(size=20)), secondary_y=False)
+        
+        fig.add_trace(go.Bar(x=b_summary['拠点'], y=b_summary['概算報酬'], name='報酬', 
+                             marker_color='#ff7f0e', text=b_summary['概算報酬'].apply(lambda x: f"¥{x:,}円"),
+                             textposition='auto', textfont=dict(size=18)), secondary_y=True)
         
         fig.update_layout(
-            yaxis=dict(title="件数", titlefont=dict(size=22), tickfont=dict(size=20)),
-            yaxis2=dict(title="報酬（円）", overlaying='y', side='right', titlefont=dict(size=22), tickfont=dict(size=20)),
-            legend=dict(font=dict(size=20)),
-            xaxis=dict(tickfont=dict(size=26, color="black", family="Arial Black"))
+            xaxis=dict(tickfont=dict(size=26, color="black", family="Arial Black")),
+            legend=dict(font=dict(size=18)),
+            margin=dict(l=20, r=20, t=40, b=20)
         )
+        fig.update_yaxes(title_text="件数", secondary_y=False, titlefont=dict(size=20))
+        fig.update_yaxes(title_text="報酬（円）", secondary_y=True, titlefont=dict(size=20))
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
@@ -110,7 +117,7 @@ if all_data_list:
     # --- 【下段】月次推移グラフ ---
     if len(months) > 1:
         st.divider()
-        st.header("📈 報酬・利用者数の月次推移（過去データ）")
+        st.header("📈 報酬・利用者数の月次推移")
         trend_df = df_all.groupby(['年月', '拠点']).agg({'利用者名':'count', '概算報酬':'sum'}).reset_index()
         
         col_t1, col_t2 = st.columns(2)
@@ -129,4 +136,4 @@ if all_data_list:
     st.plotly_chart(fig_rank, use_container_width=True)
 
 else:
-    st.info("CSVファイルをアップロードしてください。ファイル名は『2026.03_実績.csv』のように始めてください。")
+    st.info("CSVファイルをアップロードしてください。ファイル名は『2026.04_xxx.csv』のように始めてください。")
