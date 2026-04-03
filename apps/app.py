@@ -1,26 +1,26 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
-# ページの設定
+# ページ設定
 st.set_page_config(page_title="合同会社霞海喜実績管理", layout="wide")
 
-# CSSで数字を大きく、見やすく調整
+# 文字を巨大にするCSS
 st.markdown("""
     <style>
-    [data-testid="stMetricValue"] { font-size: 40px; color: #1f77b4; }
-    .main-title { font-size: 32px; font-weight: bold; color: #2c3e50; border-bottom: 3px solid #1f77b4; padding-bottom: 10px; }
+    [data-testid="stMetricValue"] { font-size: 60px !important; font-weight: bold !important; color: #1f77b4 !important; }
+    [data-testid="stMetricLabel"] { font-size: 25px !important; font-weight: bold !important; }
+    .main-title { font-size: 40px; font-weight: bold; color: #2c3e50; border-bottom: 5px solid #1f77b4; }
+    .branch-label { font-size: 24px; font-weight: bold; color: #333; }
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown('<p class="main-title">🏢 合同会社霞海喜 実績管理システム</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-title">🏢 合同会社霞海喜 実績管理システム（12ヶ月分析版）</p>', unsafe_allow_html=True)
 
-# 1. ファイルアップローダー
-col_f1, col_f2 = st.columns(2)
-with col_f1:
-    old_file = st.file_uploader("📅 1. 先月のCSVを選択", type="csv")
-with col_f2:
-    new_file = st.file_uploader("📅 2. 今月のCSVを選択", type="csv")
+# --- 1. ファイルアップローダー（複数対応） ---
+st.subheader("📁 CSVファイルをアップロード（複数まとめて12ヶ月分など選択可）")
+uploaded_files = st.file_uploader("ナーシングのCSVファイルをすべて選択してください（複数選択可）", type="csv", accept_multiple_files=True)
 
 # 報酬計算（江戸川区: 1級地 10.9円）
 def estimate_revenue(kaigodo):
@@ -35,96 +35,89 @@ def estimate_revenue(kaigodo):
 # 拠点判別
 def get_branch(cm_name):
     cm_name = str(cm_name)
-    branch_a_keywords = ["中村", "鈴木", "西野"]
-    if any(kw in cm_name for kw in branch_a_keywords):
-        return "かすみ介護相談室"
-    else:
-        return "かすみ介護相談室葛西"
+    if any(kw in cm_name for kw in ["中村", "鈴木", "西野"]): return "かすみ介護相談室"
+    else: return "かすみ介護相談室葛西"
 
-def process_data(file):
-    if file is None: return None
-    try:
-        df = pd.read_csv(file, encoding='utf-8')
-    except:
-        df = pd.read_csv(file, encoding='shift-jis')
-    df = df.dropna(subset=['利用者名'])
-    df['拠点'] = df['ケアマネ'].apply(get_branch)
-    df['概算報酬'] = df['要介護度'].apply(estimate_revenue)
-    return df
-
-df_old = process_data(old_file)
-df_new = process_data(new_file)
-
-if df_new is not None:
-    # --- 【最上段】メイン指標 ---
-    total_rev = df_new['概算報酬'].sum()
-    total_users = len(df_new)
-    
-    st.divider()
-    m1, m2, m3 = st.columns(3)
-    m1.metric("全体の総利用者数", f"{total_users} 件")
-    m2.metric("全体の見込報酬", f"¥{total_rev:,} 円")
-    
-    if df_old is not None:
-        new_names = set(df_new['利用者名']) - set(df_old['利用者名'])
-        lost_names = set(df_old['利用者名']) - set(df_new['利用者名'])
-        diff = len(new_names) - len(lost_names)
-        m3.metric("前月比の増減", f"{diff:+} 名", f"新規:{len(new_names)} / 終了:{len(lost_names)}")
-
-    # --- 【上段】介護度別割合（円グラフ） ---
-    st.divider()
-    st.subheader("📊 事業所全体の介護度分布")
-    care_counts = df_new['要介護度'].fillna('不明').value_counts().reset_index()
-    care_counts.columns = ['要介護度', '人数']
-    fig_care = px.pie(care_counts, values='人数', names='要介護度', hole=0.5, 
-                      color_discrete_sequence=px.colors.qualitative.Pastel)
-    fig_care.update_traces(textinfo='percent+label', textfont_size=15)
-    st.plotly_chart(fig_care, use_container_width=True)
-
-    # --- 【中段】拠点別比較（棒グラフ） ---
-    st.divider()
-    st.header("📍 拠点別の実績比較")
-    branch_summary = df_new.groupby('拠点').agg({'利用者名': 'count', '概算報酬': 'sum'}).reset_index()
-    
-    col_b1, col_b2 = st.columns(2)
-    with col_b1:
-        fig_b1 = px.bar(branch_summary, x='拠点', y='利用者名', text_auto=True,
-                        title="拠点別 利用者数（件）", color='拠点', color_discrete_map={"かすみ介護相談室":"#1f77b4", "かすみ介護相談室葛西":"#ff7f0e"})
-        fig_b1.update_traces(texttemplate='%{y} 件', textposition='outside')
-        st.plotly_chart(fig_b1, use_container_width=True)
-    
-    with col_b2:
-        # 概算報酬の比較（カンマ付き、円表記）
-        fig_b2 = px.bar(branch_summary, x='拠点', y='概算報酬', text='概算報酬',
-                        title="拠点別 概算報酬（円）", color='拠点', color_discrete_map={"かすみ介護相談室":"#1f77b4", "かすみ介護相談室葛西":"#ff7f0e"})
-        fig_b2.update_traces(texttemplate='%{text:,.0f} 円', textposition='outside')
-        # グラフの差がハッキリ見えるようにY軸を調整
-        fig_b2.update_layout(yaxis=dict(range=[0, branch_summary['概算報酬'].max() * 1.2]))
-        st.plotly_chart(fig_b2, use_container_width=True)
-
-    # --- 【下段】ケアマネ報酬ランキング ---
-    st.divider()
-    st.header("🏆 ケアマネ別 売上貢献度ランキング")
-    cm_summary = df_new.groupby(['ケアマネ', '拠点']).agg({'利用者名': 'count', '概算報酬': 'sum'}).reset_index().sort_values('概算報酬', ascending=False)
-    
-    fig_cm_rev = px.bar(cm_summary, x='ケアマネ', y='概算報酬', text='概算報酬', color='拠点',
-                        title="担当者別 概算報酬ランキング")
-    fig_cm_rev.update_traces(texttemplate='%{text:,.0f} 円', textposition='outside')
-    st.plotly_chart(fig_cm_rev, use_container_width=True)
-
-    # --- 【最下段】担当者別ドリルダウン ---
-    st.divider()
-    st.header("🔍 担当者別の詳細データ")
-    selected_cm = st.selectbox("詳しく見たい担当者を選択してください", ["-- 選択してください --"] + list(cm_summary['ケアマネ'].unique()))
-
-    if selected_cm != "-- 選択してください --":
-        person_df = df_new[df_new['ケアマネ'] == selected_cm].copy()
-        # 報酬をカンマ付き文字列に変換して表示用にする
-        person_df['概算報酬（円）'] = person_df['概算報酬'].apply(lambda x: f"¥{x:,}")
+# データ処理
+all_data = []
+if uploaded_files:
+    for file in uploaded_files:
+        try:
+            df = pd.read_csv(file, encoding='utf-8')
+        except:
+            df = pd.read_csv(file, encoding='shift-jis')
         
-        st.subheader(f"【{selected_cm}】さんの担当リスト")
-        st.write(f"担当件数: **{len(person_df)} 件**  /  概算報酬合計: **¥{person_df['概算報酬'].sum():,} 円**")
-        st.dataframe(person_df[['利用者名', '要介護度', '保険者', '概算報酬（円）', 'メモ']], use_container_width=True)
+        df = df.dropna(subset=['利用者名'])
+        # ファイル内の「作成 年月日」から年月を抽出（なければファイル名からなど）
+        df['年月'] = pd.to_datetime(df['作成 年月日']).dt.strftime('%Y-%m')
+        df['拠点'] = df['ケアマネ'].apply(get_branch)
+        df['概算報酬'] = df['要介護度'].apply(estimate_revenue)
+        all_data.append(df)
+
+if all_data:
+    df_main = pd.concat(all_data).drop_duplicates(subset=['利用者名', '年月'])
+    latest_month = sorted(df_main['年月'].unique())[-1]
+    df_latest = df_main[df_main['年月'] == latest_month]
+
+    # --- 【最上段】巨大な数字 ---
+    st.divider()
+    t1, t2 = st.columns(2)
+    t1.metric(f"📈 {latest_month} 総利用者数", f"{len(df_latest)} 件")
+    t2.metric(f"💰 {latest_month} 総見込報酬", f"¥{df_latest['概算報酬'].sum():,} 円")
+
+    # --- 【中段】拠点別の比較分析 ---
+    st.divider()
+    st.header(f"📍 {latest_month} 拠点別の実績・内訳比較")
+    
+    # 拠点別集計
+    b_summary = df_latest.groupby('拠点').agg({'利用者名':'count', '概算報酬':'sum'}).reset_index()
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown('<p class="branch-label">【件数と売上の比較】</p>', unsafe_allow_html=True)
+        # 件数と売上の2軸グラフで差を明確にする
+        fig_compare = go.Figure()
+        fig_compare.add_trace(go.Bar(x=b_summary['拠点'], y=b_summary['利用者名'], name='利用者数（件）', 
+                                     text=b_summary['利用者名'], textposition='auto', marker_color='#1f77b4'))
+        fig_compare.add_trace(go.Bar(x=b_summary['拠点'], y=b_summary['概算報酬'], name='報酬（円）', 
+                                     text=b_summary['概算報酬'].apply(lambda x: f"¥{x:,}"), textposition='auto', marker_color='#ff7f0e', yaxis='y2'))
+        
+        fig_compare.update_layout(
+            yaxis=dict(title="利用者数（件）", titlefont=dict(size=20), tickfont=dict(size=18)),
+            yaxis2=dict(title="報酬（円）", titlefont=dict(size=20), tickfont=dict(size=18), overlaying='y', side='right'),
+            legend=dict(font=dict(size=18)),
+            font=dict(size=18, color="black"),
+            xaxis=dict(tickfont=dict(size=22, color="black")) # 拠点名を大きく
+        )
+        st.plotly_chart(fig_compare, use_container_width=True)
+
+    with col2:
+        st.markdown('<p class="branch-label">【拠点別の介護度内訳】</p>', unsafe_allow_html=True)
+        # 拠点ごとの介護度分布（これで売上の差の理由がわかる）
+        fig_care_branch = px.bar(df_latest, x='拠点', color='要介護度', title="拠点別 介護度分布",
+                                 color_discrete_sequence=px.colors.qualitative.Safe)
+        fig_care_branch.update_layout(font=dict(size=18), xaxis=dict(tickfont=dict(size=22, color="black")))
+        st.plotly_chart(fig_care_branch, use_container_width=True)
+
+    # --- 【下段】12ヶ月の推移グラフ ---
+    st.divider()
+    st.header("📈 報酬・利用者数の月次推移（過去データ）")
+    trend_df = df_main.groupby(['年月', '拠点']).agg({'利用者名':'count', '概算報酬':'sum'}).reset_index()
+    
+    fig_trend = px.line(trend_df, x='年月', y='概算報酬', color='拠点', markers=True, 
+                        title="月次報酬推移（円）", line_shape='linear')
+    fig_trend.update_layout(font=dict(size=18), yaxis=dict(tickfont=dict(size=18)))
+    st.plotly_chart(fig_trend, use_container_width=True)
+
+    # --- ケアマネランキング ---
+    st.divider()
+    st.header("🏆 ケアマネ別 売上貢献度")
+    cm_summary = df_latest.groupby(['ケアマネ', '拠点']).agg({'概算報酬':'sum'}).reset_index().sort_values('概算報酬', ascending=False)
+    fig_rank = px.bar(cm_summary, x='ケアマネ', y='概算報酬', text='概算報酬', color='拠点')
+    fig_rank.update_traces(texttemplate='%{text:,.0f} 円', textposition='outside')
+    fig_rank.update_layout(font=dict(size=18), xaxis=dict(tickfont=dict(size=20, color="black")))
+    st.plotly_chart(fig_rank, use_container_width=True)
 
 else:
-    st.info("CSVファイルをアップロードしてください。")
+    st.info("複数のCSVファイルをアップロードすると、月次推移グラフが表示されます。")
